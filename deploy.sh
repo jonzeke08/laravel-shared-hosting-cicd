@@ -1,27 +1,27 @@
 #!/bin/bash
-
 set -e
 
 echo "Starting deployment..."
 
-# Go to app directory
-cd my_app
+# We are now inside public_html
+REPO_ROOT=$(pwd)
 
-# Install PHP dependencies
+# 1. Sync Laravel app OUTSIDE public_html
+rsync -av --delete \
+  --exclude='.env' \
+  my_app/ \
+  ../my_app/
+
+# 2. Install & build inside REAL app
+cd ../my_app
+
 composer install --no-dev --optimize-autoloader
-
-# Build frontend
 npm install
 npm run build
-
-# Optimize Laravel
 php artisan optimize
 
-# Go back to public_html
-cd ..
+# 3. Sync public assets BACK to public_html
+rsync -av --delete public/build/ "$REPO_ROOT/build/"
+rsync -av public/index.php "$REPO_ROOT/index.php"
 
-# Sync public assets
-rsync -av --delete my_app/public/build/ public_html/build/
-rsync -av my_app/public/index.php public_html/index.php
-
-echo "Deployment finished."
+echo "Deployment finished successfully."
