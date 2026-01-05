@@ -81,9 +81,7 @@ export default function Welcome({
                         </div>
 
                         <div className="mt-10 rounded-lg border border-dashed border-gray-300 p-6 text-center dark:border-gray-700">
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                                This is a temporary dashboard.
-                                <br />
+                            <p className="text-xl text-gray-600 dark:text-gray-400">
                                 GAUNSA MAN KA DIRE? HAHAHAHA
                             </p>
                         </div>
