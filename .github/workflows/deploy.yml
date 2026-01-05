@@ -1,0 +1,74 @@
+name: Deploy to Hostinger (SSH)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Run remote deploy script over SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          # Include this if you set a passphrase when generating the key:
+          # passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          script_stop: true
+          command_timeout: "30m"
+          script: |
+            set -euo pipefail
+
+            REMOTE_PATH="${REMOTE_PATH:-${{ secrets.REMOTE_PATH }}}"
+            BRANCH="${BRANCH:-${{ secrets.BRANCH }}}"
+            PHP_BIN="${PHP_BIN:-${{ secrets.PHP_BIN }}}"
+            COMPOSER_BIN="${COMPOSER_BIN:-${{ secrets.COMPOSER_BIN }}}"
+
+            # Defaults if secrets are not set
+            PHP_BIN=${PHP_BIN:-php}
+            COMPOSER_BIN=${COMPOSER_BIN:-composer}
+            BRANCH=${BRANCH:-main}
+
+            echo "Deploying to: $REMOTE_PATH on branch: $BRANCH"
+            cd "$REMOTE_PATH"
+
+            echo "Fetching latest code..."
+            git fetch --all --prune
+            git reset --hard "origin/$BRANCH"
+
+            echo "Installing Composer dependencies (production)..."
+            if command -v "$COMPOSER_BIN" >/dev/null 2>&1; then
+              "$COMPOSER_BIN" install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+            elif [ -f composer.phar ]; then
+              "$PHP_BIN" composer.phar install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+            else
+              echo "Composer not found. Please set COMPOSER_BIN or place composer.phar in project root."
+              exit 1
+            fi
+
+            echo "Setting writable permissions for storage and cache..."
+            chmod -R ug+rw storage bootstrap/cache || true
+
+            echo "Refreshing Laravel caches..."
+            "$PHP_BIN" artisan config:cache
+            "$PHP_BIN" artisan view:cache
+            "$PHP_BIN" artisan event:cache || true
+            "$PHP_BIN" artisan route:cache || true
+            "$PHP_BIN" artisan optimize
+
+            # Optional: run migrations if appropriate
+            # "$PHP_BIN" artisan migrate --force
+
+            echo "Done."

@@ -84,7 +84,7 @@ export default function Welcome({
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                                 This is a temporary dashboard.
                                 <br />
-                                Replace with your real app anytime.
+                                GAUNSA MAN KA DIRE? HAHAHAHA
                             </p>
                         </div>
                     </div>
