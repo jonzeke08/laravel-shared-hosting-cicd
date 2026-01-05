@@ -7,7 +7,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
     base: '/build/',
     build: {
-        manifest: true,
+        manifest: 'manifest.json',
         outDir: 'public/build',
         emptyOutDir: true,
     },
