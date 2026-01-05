@@ -13,8 +13,6 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v0.1.10
@@ -23,10 +21,6 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          # Optional: uncomment if your key has a passphrase
-          # passphrase: ${{ secrets.SSH_PASSPHRASE }}
-          # Temporary fallback if keys aren’t working yet (remove once fixed):
-          # password: ${{ secrets.SSH_PASSWORD }}
           script_stop: true
           command_timeout: "30m"
           script: |
@@ -43,16 +37,15 @@ jobs:
 
             echo "Deploying to: $REMOTE_PATH on branch: $BRANCH"
             cd "$REMOTE_PATH"
-            git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "Not a git repo at $REMOTE_PATH"; exit 1; }
-
-            echo "Fetching latest code..."
             git fetch --all --prune
             git reset --hard "origin/$BRANCH"
 
-            echo "Cleaning vendor to avoid stale autoloader..."
-            rm -rf vendor
+            # Clear any stale cached provider/config files (may reference dev-only packages)
+            echo "Clearing Laravel cached bootstrap files..."
+            rm -f bootstrap/cache/*.php || true
 
-            echo "Installing Composer dependencies (production, no scripts)..."
+            echo "Reinstalling Composer deps (prod, no scripts)..."
+            rm -rf vendor
             if command -v "$COMPOSER_BIN" >/dev/null 2>&1; then
               "$COMPOSER_BIN" install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --no-scripts
             elif [ -f composer.phar ]; then
@@ -65,15 +58,12 @@ jobs:
             echo "Setting writable permissions..."
             chmod -R ug+rw storage bootstrap/cache || true
 
-            echo "Running Laravel package discovery and caches..."
+            echo "Rebuilding discovery and caches..."
             "$PHP_BIN" artisan package:discover --ansi || true
             "$PHP_BIN" artisan config:cache
             "$PHP_BIN" artisan view:cache
             "$PHP_BIN" artisan event:cache || true
             "$PHP_BIN" artisan route:cache || true
             "$PHP_BIN" artisan optimize
-
-            # Optional: migrations
-            # "$PHP_BIN" artisan migrate --force
 
             echo "Done."
