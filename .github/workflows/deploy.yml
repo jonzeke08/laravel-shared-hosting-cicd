@@ -12,20 +12,21 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - name: Run remote deploy script over SSH
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          # Include this if you set a passphrase when generating the key:
+          # Optional: uncomment if your key has a passphrase
           # passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          # Temporary fallback if keys aren’t working yet (remove once fixed):
+          # password: ${{ secrets.SSH_PASSWORD }}
           script_stop: true
           command_timeout: "30m"
           script: |
@@ -36,39 +37,43 @@ jobs:
             PHP_BIN="${PHP_BIN:-${{ secrets.PHP_BIN }}}"
             COMPOSER_BIN="${COMPOSER_BIN:-${{ secrets.COMPOSER_BIN }}}"
 
-            # Defaults if secrets are not set
             PHP_BIN=${PHP_BIN:-php}
             COMPOSER_BIN=${COMPOSER_BIN:-composer}
             BRANCH=${BRANCH:-main}
 
             echo "Deploying to: $REMOTE_PATH on branch: $BRANCH"
             cd "$REMOTE_PATH"
+            git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "Not a git repo at $REMOTE_PATH"; exit 1; }
 
             echo "Fetching latest code..."
             git fetch --all --prune
             git reset --hard "origin/$BRANCH"
 
-            echo "Installing Composer dependencies (production)..."
+            echo "Cleaning vendor to avoid stale autoloader..."
+            rm -rf vendor
+
+            echo "Installing Composer dependencies (production, no scripts)..."
             if command -v "$COMPOSER_BIN" >/dev/null 2>&1; then
-              "$COMPOSER_BIN" install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+              "$COMPOSER_BIN" install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --no-scripts
             elif [ -f composer.phar ]; then
-              "$PHP_BIN" composer.phar install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+              "$PHP_BIN" composer.phar install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader --no-scripts
             else
-              echo "Composer not found. Please set COMPOSER_BIN or place composer.phar in project root."
+              echo "Composer not found. Set COMPOSER_BIN or place composer.phar in project root."
               exit 1
             fi
 
-            echo "Setting writable permissions for storage and cache..."
+            echo "Setting writable permissions..."
             chmod -R ug+rw storage bootstrap/cache || true
 
-            echo "Refreshing Laravel caches..."
+            echo "Running Laravel package discovery and caches..."
+            "$PHP_BIN" artisan package:discover --ansi || true
             "$PHP_BIN" artisan config:cache
             "$PHP_BIN" artisan view:cache
             "$PHP_BIN" artisan event:cache || true
             "$PHP_BIN" artisan route:cache || true
             "$PHP_BIN" artisan optimize
 
-            # Optional: run migrations if appropriate
+            # Optional: migrations
             # "$PHP_BIN" artisan migrate --force
 
             echo "Done."
