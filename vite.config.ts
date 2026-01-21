@@ -30,4 +30,19 @@ export default defineConfig({
     esbuild: {
         jsx: 'automatic',
     },
+    theme: {
+    extend: {
+      colors: {
+        // helpful accents if you want to match the screenshots
+        rose: {
+          600: '#fb7185',
+          500: '#f43f5e',
+        },
+        // add other custom tokens if desired
+      },
+      borderRadius: {
+        xl: '1rem',
+      },
+    },
+  },
 });

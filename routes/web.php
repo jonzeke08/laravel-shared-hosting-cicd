@@ -16,4 +16,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 });
 
+// Route::post('/chat', [ChatController::class, 'chat']);
+
 require __DIR__.'/settings.php';
